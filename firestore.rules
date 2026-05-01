@@ -1,0 +1,106 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- VALIDATION HELPERS ---
+    function isValidHousehold(data) {
+      return data.keys().hasAll(['memberIds', 'createdAt'])
+        && data.keys().size() == 2
+        && data.memberIds is list
+        && data.memberIds.size() > 0
+        && data.memberIds.size() <= 4
+        && data.memberIds[0] is string
+        && data.createdAt == request.time;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['title', 'amount', 'type', 'category', 'createdBy', 'createdByName', 'date', 'createdAt', 'observation'])
+        && data.keys().size() == 9
+        && data.title is string && data.title.size() <= 100
+        && data.amount is number
+        && data.type is string && (data.type == 'income' || data.type == 'expense_debit' || data.type == 'expense_credit')
+        && data.category is string && data.category.size() <= 100
+        && data.createdBy is string 
+        && data.createdByName is string && data.createdByName.size() <= 50
+        && data.date is string && data.date.size() <= 20
+        && data.createdAt == request.time
+        && data.observation is string && data.observation.size() <= 500;
+    }
+
+    function isValidTransactionUpdate(data) {
+      return data.title is string && data.title.size() <= 100
+        && data.amount is number
+        && data.type is string && (data.type == 'income' || data.type == 'expense_debit' || data.type == 'expense_credit')
+        && data.category is string && data.category.size() <= 100
+        && data.createdByName is string && data.createdByName.size() <= 50
+        && data.date is string && data.date.size() <= 20
+        && data.observation is string && data.observation.size() <= 500;
+    }
+
+    // --- RULES ---
+
+    match /households/{householdId} {
+      allow get: if isValidId(householdId);
+      allow list: if true;
+      
+      allow create: if isValidId(householdId) && isValidHousehold(incoming());
+      
+      allow update: if isValidId(householdId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['memberIds'])
+        && incoming().memberIds is list
+        && incoming().memberIds.size() > 0
+        && incoming().memberIds.size() <= 4;
+    }
+
+    match /households/{householdId}/transactions/{transactionId} {
+
+      allow get: if isValidId(householdId) && isValidId(transactionId);
+      allow list: if isValidId(householdId);
+      
+      allow create: if isValidId(householdId) && isValidId(transactionId) 
+        && isValidTransaction(incoming());
+        
+      allow update: if isValidId(householdId) && isValidId(transactionId)
+        && isValidTransactionUpdate(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'amount', 'type', 'category', 'createdByName', 'date', 'observation'])
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt;
+        
+      allow delete: if isValidId(householdId) && isValidId(transactionId);
+    }
+
+    match /households/{householdId}/fixed_expenses/{expenseId} {
+      allow get: if isValidId(householdId) && isValidId(expenseId);
+      allow list: if isValidId(householdId);
+      
+      allow create, update: if isValidId(householdId) && isValidId(expenseId) 
+        && incoming().keys().hasAll(['category', 'amount', 'active', 'dueDay'])
+        && incoming().category is string
+        && incoming().amount is number
+        && incoming().active is bool
+        && incoming().dueDay is number;
+        
+      allow delete: if isValidId(householdId) && isValidId(expenseId);
+    }
+    match /households/{householdId}/category_limits/{limitId} {
+      allow get: if isValidId(householdId) && isValidId(limitId);
+      allow list: if isValidId(householdId);
+      
+      allow create, update: if isValidId(householdId) && isValidId(limitId) 
+        && incoming().keys().hasAll(['category', 'amount'])
+        && incoming().category is string
+        && incoming().amount is number;
+        
+      allow delete: if isValidId(householdId) && isValidId(limitId);
+    }
+  }
+}

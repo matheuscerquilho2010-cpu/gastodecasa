@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Household": {
+      "title": "Household",
+      "description": "Represents a shared space for financial tracking for the couple.",
+      "type": "object",
+      "properties": {
+        "memberIds": {
+          "type": "array",
+          "description": "List of user UIDs belonging to this household. Max 4 members."
+        },
+        "createdAt": {
+          "type": "timestamp"
+        }
+      },
+      "required": ["memberIds", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A single financial transaction (income, debit expense, credit expense)",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense_debit", "expense_credit"] },
+        "category": { "type": "string" },
+        "createdBy": { "type": "string", "description": "UID of the creator" },
+        "createdByName": { "type": "string", "description": "Name like 'Matheus' or 'Lilian'" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "observation": { "type": "string" }
+      },
+      "required": ["title", "amount", "type", "category", "createdBy", "createdByName", "date", "createdAt"]
+    }
+  },
+  "firestore": {
+    "households/{householdId}": {
+      "schema": { "$ref": "#/entities/Household" },
+      "description": "Households containing shared transactions."
+    },
+    "households/{householdId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Transactions belonging to a household."
+    }
+  }
+}
